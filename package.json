@@ -1,0 +1,13 @@
+{
+  "name": "mobile-novel-reader",
+  "version": "1.0.0",
+  "description": "移动端小说阅读工具网站",
+  "main": "functions/index.js",
+  "scripts": {
+    "dev": "wrangler pages dev --compatibility-date=2024-01-01",
+    "deploy": "wrangler pages deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
