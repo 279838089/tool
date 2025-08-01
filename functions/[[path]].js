@@ -1,5 +1,21 @@
-import fs from 'fs';
-import path from 'path';
+/**
+ * 注意：为了兼容 Cloudflare Pages Functions 的 Bundler（对 Node 内置模块的解析），
+ * 这里使用动态导入与 env.compatibility_flags = ["nodejs_compat"] 搭配。
+ * Pages 会注入 Node 兼容层，但静态 import fs/path 可能在构建时被误判，改为动态 import。
+ */
+let _fs = null;
+let _path = null;
+async function useNode() {
+  if (!_fs) {
+    // eslint-disable-next-line no-undef
+    _fs = await import('node:fs');
+  }
+  if (!_path) {
+    // eslint-disable-next-line no-undef
+    _path = await import('node:path');
+  }
+  return { fs: _fs.default || _fs, path: _path.default || _path };
+}
 
 export async function onRequest(context) {
   const { request } = context;
@@ -20,6 +36,7 @@ export async function onRequest(context) {
 }
 
 async function handleStaticFile(filePath) {
+  const { fs, path } = await useNode();
   try {
     const fullPath = path.join(process.cwd(), filePath);
     // 以二进制读取，避免图片/字体等资源损坏
@@ -49,41 +66,33 @@ async function handleStaticFile(filePath) {
 
 async function handleAPI(pathname) {
   try {
-    // 统一去除多余斜杠
     if (pathname.endsWith('/')) pathname = pathname.replace(/\/+$/, '');
 
-    // 获取小说列表
     if (pathname === '/api/novels') {
-      const novels = getNovels();
+      const novels = await getNovels();
       return json(novels);
     }
 
-    // 获取小说章节列表：/api/novels/:novel/chapters
-    // 兼容旧路径 /api/novel/:novel
     if (pathname.startsWith('/api/novels/')) {
       const parts = pathname.split('/').map(decodeURIComponent);
-      // /api/novels/{novel}/chapters
       if (parts.length >= 5 && parts[4] === 'chapters') {
-        const novelName = parts.slice(3, 4)[0];
-        const chapters = getChapters(novelName);
+        const novelName = parts[3];
+        const chapters = await getChapters(novelName);
         return json(chapters);
       }
     }
     if (pathname.startsWith('/api/novel/')) {
       const novelName = decodeURIComponent(pathname.split('/')[3]);
-      const chapters = getChapters(novelName);
+      const chapters = await getChapters(novelName);
       return json(chapters);
     }
 
-    // 获取章节内容：/api/novels/:novel/chapters/:file
-    // 兼容旧路径 /api/chapter/:novel/:file
     if (pathname.startsWith('/api/novels/')) {
       const parts = pathname.split('/').map(decodeURIComponent);
-      // /api/novels/{novel}/chapters/{file}
       if (parts.length >= 6 && parts[4] === 'chapters') {
         const novelName = parts[3];
-        const chapterFile = parts.slice(5).join('/'); // 避免文件名内含斜杠被错误拆分
-        const data = getChapterContent(novelName, chapterFile);
+        const chapterFile = parts.slice(5).join('/');
+        const data = await getChapterContent(novelName, chapterFile);
         return json(data);
       }
     }
@@ -91,7 +100,7 @@ async function handleAPI(pathname) {
       const parts = pathname.split('/').map(decodeURIComponent);
       const novelName = parts[3];
       const chapterFile = parts.slice(4).join('/');
-      const data = getChapterContent(novelName, chapterFile);
+      const data = await getChapterContent(novelName, chapterFile);
       return json(data);
     }
 
@@ -137,7 +146,8 @@ async function handlePage(pathname) {
 }
 
 // 获取小说列表
-function getNovels() {
+async function getNovels() {
+  const { fs, path } = await useNode();
   try {
     const novelsDir = path.join(process.cwd(), 'novels');
     if (!fs.existsSync(novelsDir)) {
@@ -160,7 +170,8 @@ function getNovels() {
 }
 
 // 获取章节列表
-function getChapters(novelName) {
+async function getChapters(novelName) {
+  const { fs, path } = await useNode();
   try {
     const novelDir = path.join(process.cwd(), 'novels', novelName);
     if (!fs.existsSync(novelDir)) {
@@ -191,11 +202,11 @@ function getChapters(novelName) {
 }
 
 // 获取章节内容
-function getChapterContent(novelName, chapterFile) {
+async function getChapterContent(novelName, chapterFile) {
+  const { fs, path } = await useNode();
   try {
     const novelDir = path.join(process.cwd(), 'novels', novelName);
     const files = fs.readdirSync(novelDir).filter(f => f.endsWith('.md'));
-    // 排序，提取相邻章节
     const chapters = files.map(file => {
       const match = file.match(/^(\d+)_/);
       const order = match ? parseInt(match[1], 10) : 999999;
