@@ -1,28 +1,13 @@
-# Cloudflare Pages 项目配置（使用 Pages Functions）
-# 部署命令：npm run deploy  -> 等同于 `wrangler pages deploy .`
-# 本地开发：npm run dev     -> 等同于 `wrangler pages dev --compatibility-date=2024-01-01`
+# Cloudflare Pages 项目配置（仅保留 Pages 支持的字段）
+# 注意：Pages 不支持 [build]、[env.production] 等 Workers 字段
+# Pages Functions 会自动使用仓库根目录下的 `functions/` 作为函数入口
 
 name = "mobile-novel-reader"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 指定 Pages Functions 入口目录（functions 文件夹）
+# 指定 Pages 的输出目录为仓库根（与控制台的 Build output directory="." 配合）
 pages_build_output_dir = "."
 
-[build]
-command = ""
-
-# Pages Functions 不需要设置 main（main 仅用于 Workers 模式）。
-# 若你使用 Workers 部署而非 Pages，请改用：
-# main = "functions/[[path]].js"
-
-[env.production]
-name = "mobile-novel-reader"
-
-[env.production.build]
-command = ""
-
-# 将本地 novels 目录作为静态资源随代码发布，供 Pages Functions 通过 nodejs_compat 的 fs 读取
-[[env.production.mounts]]
-source = "./novels"
-destination = "/novels"
+# 如果你的 Pages 环境需要自定义变量，可在控制台配置 Environment Variables
+# novels 目录随代码一起上传，无需 mounts（mounts 属于 Workers，Pages 不支持）
