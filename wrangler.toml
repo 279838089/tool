@@ -1,13 +1,6 @@
-# Cloudflare Pages 项目配置（仅保留 Pages 支持的字段）
-# 注意：Pages 不支持 [build]、[env.production] 等 Workers 字段
-# Pages Functions 会自动使用仓库根目录下的 `functions/` 作为函数入口
+# Cloudflare Pages 配置（最小化，去除 Pages 不支持的键）
+# Pages Functions 将自动使用仓库根下的 functions/ 目录
 
 name = "mobile-novel-reader"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
-
-# 指定 Pages 的输出目录为仓库根（与控制台的 Build output directory="." 配合）
-pages_build_output_dir = "."
-
-# 如果你的 Pages 环境需要自定义变量，可在控制台配置 Environment Variables
-# novels 目录随代码一起上传，无需 mounts（mounts 属于 Workers，Pages 不支持）
