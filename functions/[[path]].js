@@ -21,8 +21,8 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
   
-  // 静态文件处理
-  if (url.pathname.startsWith('/static/') || url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
+  // 静态文件处理：仅放行 /static/*，避免误拦截 Pages 静态托管的其它资源路径
+  if (url.pathname.startsWith('/static/')) {
     return handleStaticFile(url.pathname);
   }
   
@@ -36,13 +36,22 @@ export async function onRequest(context) {
 }
 
 async function handleStaticFile(filePath) {
-  const { fs, path } = await useNode();
   try {
+    // 对于 Pages，/static 下的文件本可由 Pages 静态层直接托管。
+    // 但我们也提供兜底读取，确保 Functions 环境可本地读取。
+    const { fs, path } = await useNode();
     const fullPath = path.join(process.cwd(), filePath);
-    // 以二进制读取，避免图片/字体等资源损坏
-    const content = fs.readFileSync(fullPath);
-    
+
+    if (!fs.existsSync(fullPath)) {
+      // 若文件不存在，返回 404，让浏览器不缓存错误
+      return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    // 文本资源按 utf-8，其他按二进制
     const ext = path.extname(filePath).toLowerCase();
+    const isText = ['.css', '.js', '.html', '.svg'].includes(ext);
+    const content = isText ? fs.readFileSync(fullPath, 'utf-8') : fs.readFileSync(fullPath);
+
     const contentType = {
       '.css': 'text/css; charset=utf-8',
       '.js': 'application/javascript; charset=utf-8',
@@ -54,13 +63,18 @@ async function handleStaticFile(filePath) {
       '.svg': 'image/svg+xml',
       '.webp': 'image/webp',
       '.ico': 'image/x-icon'
-    }[ext] || 'application/octet-stream';
-    
+    }[ext] || (isText ? 'text/plain; charset=utf-8' : 'application/octet-stream');
+
     return new Response(content, {
-      headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' }
+      headers: {
+        'Content-Type': contentType,
+        // 对静态资源设置较长缓存
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }
     });
   } catch (error) {
-    return new Response('File not found', { status: 404 });
+    // 捕捉异常，避免 500 泄露
+    return new Response('Internal Error', { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }
 
@@ -68,25 +82,31 @@ async function handleAPI(pathname) {
   try {
     if (pathname.endsWith('/')) pathname = pathname.replace(/\/+$/, '');
 
+    // GET /api/novels 读取小说目录
     if (pathname === '/api/novels') {
       const novels = await getNovels();
       return json(novels);
     }
 
+    // GET /api/novels/:novel/chapters
     if (pathname.startsWith('/api/novels/')) {
       const parts = pathname.split('/').map(decodeURIComponent);
+      // /api/novels/{novel}/chapters
       if (parts.length >= 5 && parts[4] === 'chapters') {
         const novelName = parts[3];
         const chapters = await getChapters(novelName);
         return json(chapters);
       }
     }
+
+    // 兼容旧路径：GET /api/novel/:novel
     if (pathname.startsWith('/api/novel/')) {
-      const novelName = decodeURIComponent(pathname.split('/')[3]);
+      const novelName = decodeURIComponent(pathname.split('/')[3] || '');
       const chapters = await getChapters(novelName);
       return json(chapters);
     }
 
+    // GET /api/novels/:novel/chapters/:file
     if (pathname.startsWith('/api/novels/')) {
       const parts = pathname.split('/').map(decodeURIComponent);
       if (parts.length >= 6 && parts[4] === 'chapters') {
@@ -96,17 +116,25 @@ async function handleAPI(pathname) {
         return json(data);
       }
     }
+
+    // 兼容旧路径：GET /api/chapter/:novel/:file
     if (pathname.startsWith('/api/chapter/')) {
       const parts = pathname.split('/').map(decodeURIComponent);
-      const novelName = parts[3];
+      const novelName = parts[3] || '';
       const chapterFile = parts.slice(4).join('/');
       const data = await getChapterContent(novelName, chapterFile);
       return json(data);
     }
 
+    // API 根路径兜底，便于前端健康检查
+    if (pathname === '/api' || pathname === '/api/') {
+      return json({ ok: true });
+    }
+
     return new Response('Not Found', { status: 404 });
   } catch (e) {
-    return json({ error: 'Internal Server Error' }, 500);
+    // 返回可见错误，便于前端显示“暂无小说”而不是一直加载
+    return json({ error: e?.message || 'Internal Server Error' }, 500);
   }
 }
 
