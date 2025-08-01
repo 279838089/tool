@@ -1,0 +1,67 @@
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #666;
+  --primary: #1a73e8;
+  --card: #f8f9fa;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, "Noto Sans CJK SC", sans-serif; }
+meta[name="viewport"] { width: device-width; }
+
+.app-header {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid #eee;
+  padding: 14px 16px;
+  font-weight: 600;
+  z-index: 10;
+}
+.app-header h1 { margin: 0; font-size: 18px; }
+
+.container { padding: 16px; }
+
+.tool-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.tool-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.book-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.book-item {
+  display: block;
+  padding: 14px 12px;
+  background: #fff;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid #eee;
+}
+.book-item .book-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+.book-item .book-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* small screens single column */
+@media (max-width: 380px) {
+  .book-list { grid-template-columns: 1fr; }
+}
