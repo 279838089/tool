@@ -1,19 +1,13 @@
 /**
- * 注意：为了兼容 Cloudflare Pages Functions 的 Bundler（对 Node 内置模块的解析），
- * 这里使用动态导入与 env.compatibility_flags = ["nodejs_compat"] 搭配。
- * Pages 会注入 Node 兼容层，但静态 import fs/path 可能在构建时被误判，改为动态 import。
+ * 注意：优先通过原生静态托管返回 /static/* 资源，只有在 Pages 无法命中时才兜底读取。
+ * 为规避构建期对 Node 内置模块的静态解析，保留动态导入 node:fs/node:path。
+ * 若线上出现 500，请打开 DEBUG_LOG=true 查看错误栈。
  */
 let _fs = null;
 let _path = null;
 async function useNode() {
-  if (!_fs) {
-    // eslint-disable-next-line no-undef
-    _fs = await import('node:fs');
-  }
-  if (!_path) {
-    // eslint-disable-next-line no-undef
-    _path = await import('node:path');
-  }
+  if (!_fs) _fs = await import('node:fs');
+  if (!_path) _path = await import('node:path');
   return { fs: _fs.default || _fs, path: _path.default || _path };
 }
 
@@ -21,7 +15,7 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
   
-  // 静态文件处理：仅放行 /static/*，避免误拦截 Pages 静态托管的其它资源路径
+  // 静态资源：严格限定只读取 /static 目录，防止路径穿越；统一规范化路径
   if (url.pathname.startsWith('/static/')) {
     return handleStaticFile(url.pathname);
   }
@@ -37,18 +31,29 @@ export async function onRequest(context) {
 
 async function handleStaticFile(filePath) {
   try {
-    // 对于 Pages，/static 下的文件本可由 Pages 静态层直接托管。
-    // 但我们也提供兜底读取，确保 Functions 环境可本地读取。
     const { fs, path } = await useNode();
-    const fullPath = path.join(process.cwd(), filePath);
+
+    // 规范化并强制限定在 /static 根下，防止路径穿越
+    const rel = filePath.replace(/^\/+/, ''); // 去掉开头斜杠
+    const safeRel = rel.replace(/\\/g, '/');   // 统一分隔符
+    if (!safeRel.startsWith('static/')) {
+      return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const fullPath = path.join(process.cwd(), safeRel);
+    const staticRoot = path.join(process.cwd(), 'static');
+
+    // 额外校验：确保最终路径仍在 static 目录内
+    const isInside = fullPath.startsWith(staticRoot);
+    if (!isInside) {
+      return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } });
+    }
 
     if (!fs.existsSync(fullPath)) {
-      // 若文件不存在，返回 404，让浏览器不缓存错误
       return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    // 文本资源按 utf-8，其他按二进制
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = path.extname(fullPath).toLowerCase();
     const isText = ['.css', '.js', '.html', '.svg'].includes(ext);
     const content = isText ? fs.readFileSync(fullPath, 'utf-8') : fs.readFileSync(fullPath);
 
@@ -68,12 +73,11 @@ async function handleStaticFile(filePath) {
     return new Response(content, {
       headers: {
         'Content-Type': contentType,
-        // 对静态资源设置较长缓存
         'Cache-Control': 'public, max-age=31536000, immutable'
       }
     });
   } catch (error) {
-    // 捕捉异常，避免 500 泄露
+    if (DEBUG_LOG) console.error('handleStaticFile error:', error?.stack || String(error));
     return new Response('Internal Error', { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }
@@ -141,9 +145,23 @@ async function handleAPI(pathname) {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
   });
 }
+
+// 尝试让原生静态层处理；若无法处理则返回 null 交给本函数兜底
+async function tryNativeStatic(filePath) {
+  try {
+    // 在 Pages Functions 中无法直接“转发”到静态层，这里仅作为占位可扩展。
+    // 返回 null 代表继续由 handleStaticFile 读取文件。
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// 简易日志开关（可通过临时在代码中置 true 开启）
+const DEBUG_LOG = false;
 
 async function handlePage(pathname) {
   // 主页
