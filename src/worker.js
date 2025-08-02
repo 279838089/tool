@@ -7,7 +7,7 @@
  * 注意：URL 编码与文件名匹配
  * - 书名与 slug 在 URL 中可能被编码（如空格 → %20，中文已编码）
  * - 资产路径必须使用与 public/novels 下完全一致的文件名
- * - 这里统一使用 encodeURI 仅对路径安全字符编码，避免 encodeURIComponent 将 "/" 编码破坏子路径
+ * - 某些托管环境（如 *.workers.dev）默认不注入 env.ASSETS，此时需 fallback 到同域静态路径（/novels/...）
  */
 
 export default {
@@ -54,15 +54,26 @@ export default {
         }
       }
 
-      // 静态资源
-      let res = await env.ASSETS.fetch(request);
-
+      // 静态资源：兼容 env.ASSETS 缺失时的回退到同域 fetch
       const isGetLike = request.method === 'GET' || request.method === 'HEAD';
       const isApi = pathname.startsWith('/api/');
 
+      let res;
+      if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        res = await env.ASSETS.fetch(request);
+      } else {
+        // 回退：直接用同域请求获取静态资源
+        res = await fetch(request);
+      }
+
+      // SPA 兜底：非 API 的 GET/HEAD 且 404 时回退到 /index.html
       if ((!res || res.status === 404) && isGetLike && !isApi) {
         const rewritten = new Request(new URL('/index.html', url.origin), request);
-        res = await env.ASSETS.fetch(rewritten);
+        if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+          res = await env.ASSETS.fetch(rewritten);
+        } else {
+          res = await fetch(rewritten);
+        }
       }
 
       return withCommonHeaders(res, false);
