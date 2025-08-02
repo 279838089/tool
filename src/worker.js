@@ -168,6 +168,11 @@ async function apiReadChapterFromAssets(env, baseUrl, book, slug) {
 async function fetchAsset(env, baseUrl, assetPath) {
   // assetPath 必须以 / 开头，且相对 public 根
   const url = new URL(assetPath, baseUrl);
+
+  // 确保 pathname 段编码与文件名一致（例如空格 -> %20，中文保持编码）
+  const parts = url.pathname.split('/').map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))));
+  url.pathname = parts.join('/');
+
   const req = new Request(url.toString(), { method: 'GET' });
 
   // 兼容两种运行环境：
@@ -180,8 +185,22 @@ async function fetchAsset(env, baseUrl, assetPath) {
 }
 
 async function fetchAssetJson(env, baseUrl, assetPath) {
+  // 允许 assetPath 包含已编码片段，确保与静态目录逐字匹配
   const res = await fetchAsset(env, baseUrl, assetPath);
-  if (!res || !res.ok) throw new Error(`asset not found: ${assetPath}`);
+  if (!res || !res.ok) {
+    // 额外一次尝试：对可能未编码的段落进行 encode 以兼容其它运行时
+    try {
+      const url = new URL(assetPath, baseUrl);
+      // 仅对 pathname 做一次规范化编码（逐段编码，保留斜杠）
+      const parts = url.pathname.split('/').map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))));
+      url.pathname = parts.join('/');
+      const retry = await fetchAsset(env, baseUrl, url.pathname);
+      if (!retry || !retry.ok) throw new Error(`asset not found: ${assetPath}`);
+      return retry.json();
+    } catch {
+      throw new Error(`asset not found: ${assetPath}`);
+    }
+  }
   return res.json();
 }
 
