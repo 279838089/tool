@@ -126,17 +126,25 @@ async function apiListChaptersFromAssets(env, baseUrl, book) {
   const idxPath = `/novels/${encodeURIComponent(book)}/index.json`;
   const idx = await fetchAssetJson(env, baseUrl, idxPath).catch(() => null);
 
-  // 如果没有 index.json，则尝试读取一份章节清单 chapters.json；再不行只返回空数组
   let files = Array.isArray(idx?.chapters) ? idx.chapters : [];
-  files = files.filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.md'));
+  files = files
+    .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.md'))
+    .sort((a, b) => compareByPrefixNumber(a, b));
 
-  const out = files.map(slug => ({ slug, title: deriveTitleFromFilename(slug) }));
+  // 同步提供一个 normalizedSlug，供前端或调用方用于构造稳健的 API 路径
+  const out = files.map(file => ({
+    slug: file,
+    normalizedSlug: encodeURIComponent(decodeURIComponent(file)),
+    title: deriveTitleFromFilename(file),
+  }));
+
+  // 为避免 double-encode，将 normalizedSlug 仅用于 API 路径片段展示；实际比较使用 decode 后小写
   const chapters = out.sort((a, b) => compareByPrefixNumber(a.slug, b.slug));
   return json({ book, chapters });
 }
 
 async function apiReadChapterFromAssets(env, baseUrl, book, slug) {
-  // 兼容 URL 编码差异：优先使用索引中精确匹配到的文件名
+  // 读取索引，准备匹配
   const idxPath = `/novels/${encodeURIComponent(book)}/index.json`;
   const idx = await fetchAssetJson(env, baseUrl, idxPath).catch(() => null);
   let files = Array.isArray(idx?.chapters) ? idx.chapters : [];
@@ -144,12 +152,27 @@ async function apiReadChapterFromAssets(env, baseUrl, book, slug) {
     .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.md'))
     .sort((a, b) => compareByPrefixNumber(a, b));
 
-  // 允许 slug 和索引文件名在编码、大小写上存在差异，做宽松匹配
-  const normalized = (s) => decodeURIComponent(s).toLowerCase();
-  const wanted = normalized(slug);
-  const matched = files.find(name => normalized(name) === wanted) || slug;
+  // 规范 slug：避免 URL 中的空格以 + 形式传递导致 decode 差异
+  // 浏览器在 query 中常把空格编码为 +，部分网关也可能把 path 中的 %20 变成 +，这里统一将 + 视为空格再解码
+  const normalizeForCompare = (s) => decodeURIComponent(s.replace(/\+/g, ' ')).toLowerCase();
 
-  // 构造实际读取路径
+  const wanted = normalizeForCompare(slug);
+  // 先进行严格等值（规范化后）匹配
+  let matched = files.find(name => normalizeForCompare(name) === wanted);
+
+  // 若未命中，再尝试更宽松的匹配：去掉多余的下划线/空白再比对（缓解不同构建命名差异）
+  if (!matched) {
+    const loose = (s) => normalizeForCompare(s).replace(/[\s_]+/g, ' ');
+    const lw = loose(slug);
+    matched = files.find(name => loose(name) === lw);
+  }
+
+  // 仍未命中则返回 404
+  if (!matched) {
+    return json({ error: 'Chapter not found' }, 404);
+  }
+
+  // 构造实际读取路径（逐段编码由 fetchAsset 处理）
   const chapterPath = `/novels/${encodeURIComponent(book)}/${matched}`;
   const res = await fetchAsset(env, baseUrl, chapterPath);
   if (!res || !res.ok) return json({ error: 'Chapter not found' }, 404);
@@ -160,7 +183,9 @@ async function apiReadChapterFromAssets(env, baseUrl, book, slug) {
   const total = files.length || 1;
   const title = deriveTitleFromFilename(matched);
 
-  return json({ book, slug: matched, title, index, total, content });
+  // 同时回写 normalizedSlug，便于前端以后直接使用规范化路径
+  const normalizedSlug = encodeURIComponent(decodeURIComponent(matched));
+  return json({ book, slug: matched, normalizedSlug, title, index, total, content });
 }
 
 /* ---------------- 资产读取工具 ---------------- */
