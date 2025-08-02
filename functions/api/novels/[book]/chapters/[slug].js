@@ -1,8 +1,7 @@
 /**
  * GET /api/novels/:book/chapters/:slug
- * 返回指定章节的 Markdown 原文（前端负责渲染）
- * { book, slug, title, index, total, content }
- * 兼容运行时；在本地无 fs 能力时回退静态内容，避免 500。
+ * 使用 import.meta.glob 在构建期内联所有 Markdown，运行时零 fs/Deno
+ * 响应：{ book, slug, title, index, total, content }
  */
 export async function onRequestGet(context) {
   const { params } = context;
@@ -11,81 +10,31 @@ export async function onRequestGet(context) {
   if (!book || !slug) return json({ error: 'Missing params' }, 400);
 
   try {
-    // 1) Deno 分支
-    if (typeof globalThis.Deno !== 'undefined' && Deno.readTextFile && Deno.readDir && Deno.cwd) {
-      const dir = joinPath(Deno.cwd(), 'novels', book);
-      const filePath = joinPath(dir, slug);
+    // 收集所有 markdown 原文：key 为绝对路径，value 为字符串（内容）
+    const files = import.meta.glob('/novels/**/*.md', { as: 'raw', eager: true });
 
-      const content = await Deno.readTextFile(filePath).catch(() => null);
-      if (content == null) return json({ error: 'Chapter not found' }, 404);
-
-      const entries = [];
-      for await (const entry of Deno.readDir(dir)) {
-        if (entry.isFile) entries.push(entry.name);
-      }
-      const chapters = dedupSort(entries.filter(n => n.toLowerCase().endsWith('.md')));
-
-      const index = Math.max(0, chapters.findIndex(n => n === slug));
-      const total = chapters.length || 1;
-      const title = deriveTitleFromFilename(slug);
-      return json({ book, slug, title, index, total, content });
+    const dirPrefix = `/novels/${book}/`;
+    const fullPath = `${dirPrefix}${slug}`;
+    const content = files[fullPath];
+    if (typeof content !== 'string') {
+      return json({ error: 'Chapter not found' }, 404);
     }
 
-    // 2) Node 分支（尝试 fs，失败则静态回退）
-    try {
-      const fs = await import('node:fs/promises');
-      const dir = joinPath((typeof process !== 'undefined' ? process.cwd() : '.'), 'novels', book);
-      const filePath = joinPath(dir, slug);
+    // 计算该书的章节列表，用于 index/total
+    const chapters = Object.keys(files)
+      .filter(p => p.startsWith(dirPrefix) && p.toLowerCase().endsWith('.md'))
+      .map(p => p.substring(dirPrefix.length))
+      .sort((a, b) => compareByPrefixNumber(a, b));
 
-      const content = await fs.readFile(filePath, 'utf-8');
-      const dirents = await fs.readdir(dir, { withFileTypes: true });
-      const entries = dirents.filter(d => d.isFile()).map(d => d.name);
-      const chapters = dedupSort(entries.filter(n => n.toLowerCase().endsWith('.md')));
+    const index = Math.max(0, chapters.findIndex(n => n === slug));
+    const total = chapters.length || 1;
+    const title = deriveTitleFromFilename(slug);
 
-      const index = Math.max(0, chapters.findIndex(n => n === slug));
-      const total = chapters.length || 1;
-      const title = deriveTitleFromFilename(slug);
-      return json({ book, slug, title, index, total, content });
-    } catch (_e) {
-      // 3) 静态回退：返回示例章节，保证前端可联调
-      const fallback = fallbackContent(book, slug);
-      if (!fallback) return json({ error: 'Chapter not found' }, 404);
-      const { content, index, total, title } = fallback;
-      return json({ book, slug, title, index, total, content });
-    }
+    return json({ book, slug, title, index, total, content });
   } catch (err) {
-    console.error('[api/novels/:book/chapters/:slug] error:', err);
+    console.error('[api/novels/:book/chapters/:slug] glob error:', err);
     return json({ error: 'Internal Error', detail: String(err?.stack || err) }, 500);
   }
-}
-
-function joinPath(...segs) {
-  return segs.join('/').replace(/\\+/g, '/').replace(/\/+/g, '/');
-}
-
-function fallbackContent(book, slug) {
-  const toc = {
-    '斗罗大陆': [
-      '001_第1章 斗罗大陆，异界唐三.md',
-      '002_第2章 废武魂与先天满魂力.md',
-      '003_第3章 双生武魂.md',
-    ],
-    '斗罗外传': [
-      '001_第1章 史莱克广场.md',
-      '002_第2章 千年.md',
-      '003_第3章 考核开始.md',
-      '004_第4章 教师天团.md',
-      '005_第5章 宠坏了爸爸养.md',
-    ],
-  };
-  const list = toc[book];
-  if (!list) return null;
-  const idx = Math.max(0, list.indexOf(slug));
-  const total = list.length;
-  const title = deriveTitleFromFilename(slug);
-  // 最简占位内容，指示为本地回退
-  const content = `# ${title}\n\n（本地回退示例内容）\n\n请部署到 Cloudflare Pages 或启用兼容的本地 fs/Deno 能力以读取真实 Markdown。`;
-  return { content, index: idx, total, title };
 }
 
 function deriveTitleFromFilename(name) {
@@ -93,18 +42,6 @@ function deriveTitleFromFilename(name) {
   const m = t.match(/^\d+[_\-\s]*(.+)$/);
   if (m) t = m[1];
   return t;
-}
-
-function dedupSort(list) {
-  const set = new Set();
-  const arr = [];
-  for (const n of list) {
-    if (!set.has(n)) {
-      set.add(n);
-      arr.push(n);
-    }
-  }
-  return arr.sort((a, b) => compareByPrefixNumber(a, b));
 }
 
 function compareByPrefixNumber(a, b) {

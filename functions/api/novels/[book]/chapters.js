@@ -1,7 +1,7 @@
 /**
  * GET /api/novels/:book/chapters
- * 列出某本书的章节（Markdown 文件），返回 { chapters: [{ slug, title }] }
- * 兼容：若本地环境不支持 fs/Deno，则回退静态目录表，避免 500。
+ * 使用 import.meta.glob 在构建期收集 novels 下的 Markdown，运行时零 fs/Deno 依赖
+ * 响应：{ book, chapters: [{ slug, title }] }
  */
 export async function onRequestGet(context) {
   const { params } = context;
@@ -9,65 +9,26 @@ export async function onRequestGet(context) {
   if (!book) return json({ error: 'Missing book' }, 400);
 
   try {
-    // 1) Deno 分支
-    if (typeof globalThis.Deno !== 'undefined' && Deno.readDir && Deno.cwd) {
-      const dir = joinPath(Deno.cwd(), 'novels', book);
-      const out = [];
-      for await (const entry of Deno.readDir(dir)) {
-        if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
-          out.push({ slug: entry.name, title: deriveTitleFromFilename(entry.name) });
-        }
-      }
-      const sorted = dedupAndSort(out);
-      return json({ book, chapters: sorted });
+    // 通过 Vite/ESBuild 的 import.meta.glob 在构建期把文件内联为模块字符串
+    // 注意：路径以项目根为基准，匹配 novels/**/* .md
+    const files = import.meta.glob('/novels/**/*.md', { as: 'raw', eager: true });
+
+    // 过滤到指定 book 子目录，并提取文件名作为 slug
+    const prefix = `/novels/${book}/`;
+    const out = [];
+    for (const fullPath in files) {
+      if (!fullPath.startsWith(prefix)) continue;
+      const slug = fullPath.substring(prefix.length);
+      if (!slug.toLowerCase().endsWith('.md')) continue;
+      out.push({ slug, title: deriveTitleFromFilename(slug) });
     }
 
-    // 2) Node 分支（如不可用 fs，则捕获并回退）
-    try {
-      const fs = await import('node:fs/promises');
-      const dir = joinPath((typeof process !== 'undefined' ? process.cwd() : '.'), 'novels', book);
-      const dirents = await fs.readdir(dir, { withFileTypes: true });
-      const out = dirents
-        .filter(d => d.isFile())
-        .map(d => d.name)
-        .filter(n => n.toLowerCase().endsWith('.md'))
-        .map(name => ({ slug: name, title: deriveTitleFromFilename(name) }));
-      const sorted = dedupAndSort(out);
-      return json({ book, chapters: sorted });
-    } catch (_e) {
-      // 3) 回退静态（本地 dev 无 fs 能力时）
-      return json({ book, chapters: fallbackChapters(book) });
-    }
+    const sorted = dedupAndSort(out);
+    return json({ book, chapters: sorted });
   } catch (err) {
-    console.error('[api/novels/:book/chapters] error:', err);
+    console.error('[api/novels/:book/chapters] glob error:', err);
     return json({ error: 'Internal Error', detail: String(err?.stack || err) }, 500);
   }
-}
-
-function joinPath(...segs) {
-  return segs.join('/').replace(/\\+/g, '/').replace(/\/+/g, '/');
-}
-
-function fallbackChapters(book) {
-  // 用仓库中已知的样本作为本地 dev 的静态目录，线上会走 Deno 分支拿真实目录
-  if (book === '斗罗大陆') {
-    return [
-      { slug: '001_第1章 斗罗大陆，异界唐三.md', title: '第1章 斗罗大陆，异界唐三' },
-      { slug: '002_第2章 废武魂与先天满魂力.md', title: '第2章 废武魂与先天满魂力' },
-      { slug: '003_第3章 双生武魂.md', title: '第3章 双生武魂' },
-    ];
-  }
-  if (book === '斗罗外传') {
-    // 只列出前若干章，足够联调
-    return [
-      { slug: '001_第1章 史莱克广场.md', title: '第1章 史莱克广场' },
-      { slug: '002_第2章 千年.md', title: '第2章 千年' },
-      { slug: '003_第3章 考核开始.md', title: '第3章 考核开始' },
-      { slug: '004_第4章 教师天团.md', title: '第4章 教师天团' },
-      { slug: '005_第5章 宠坏了爸爸养.md', title: '第5章 宠坏了爸爸养' },
-    ];
-  }
-  return [];
 }
 
 function dedupAndSort(arr) {
