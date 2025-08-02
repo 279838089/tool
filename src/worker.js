@@ -136,23 +136,31 @@ async function apiListChaptersFromAssets(env, baseUrl, book) {
 }
 
 async function apiReadChapterFromAssets(env, baseUrl, book, slug) {
-  const chapterPath = `/novels/${encodeURIComponent(book)}/${slug}`;
-  const res = await fetchAsset(env, baseUrl, chapterPath);
-  if (!res || !res.ok) return json({ error: 'Chapter not found' }, 404);
-  const content = await res.text();
-
-  // 读取章节索引计算 index/total
+  // 兼容 URL 编码差异：优先使用索引中精确匹配到的文件名
   const idxPath = `/novels/${encodeURIComponent(book)}/index.json`;
   const idx = await fetchAssetJson(env, baseUrl, idxPath).catch(() => null);
   let files = Array.isArray(idx?.chapters) ? idx.chapters : [];
-  files = files.filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.md'))
-               .sort((a, b) => compareByPrefixNumber(a, b));
+  files = files
+    .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.md'))
+    .sort((a, b) => compareByPrefixNumber(a, b));
 
-  const index = Math.max(0, files.findIndex(n => n === slug));
+  // 允许 slug 和索引文件名在编码、大小写上存在差异，做宽松匹配
+  const normalized = (s) => decodeURIComponent(s).toLowerCase();
+  const wanted = normalized(slug);
+  const matched = files.find(name => normalized(name) === wanted) || slug;
+
+  // 构造实际读取路径
+  const chapterPath = `/novels/${encodeURIComponent(book)}/${matched}`;
+  const res = await fetchAsset(env, baseUrl, chapterPath);
+  if (!res || !res.ok) return json({ error: 'Chapter not found' }, 404);
+
+  const content = await res.text();
+
+  const index = Math.max(0, files.findIndex(n => n === matched));
   const total = files.length || 1;
-  const title = deriveTitleFromFilename(slug);
+  const title = deriveTitleFromFilename(matched);
 
-  return json({ book, slug, title, index, total, content });
+  return json({ book, slug: matched, title, index, total, content });
 }
 
 /* ---------------- 资产读取工具 ---------------- */
