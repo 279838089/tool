@@ -54,15 +54,27 @@ export default {
         }
       }
 
-      // 静态资源：兼容 env.ASSETS 缺失时的回退到同域 fetch
+      // 静态资源：兼容 Pages Functions/Workers 不注入 env.ASSETS 的场景
       const isGetLike = request.method === 'GET' || request.method === 'HEAD';
       const isApi = pathname.startsWith('/api/');
 
+      // 如果请求命中 /novels 前缀，直接透传到同域静态路径，避免依赖 env.ASSETS
+      if (isGetLike && !isApi && pathname.startsWith('/novels/')) {
+        const direct = await fetch(request);
+        if (direct && direct.ok) {
+          return withCommonHeaders(direct, false);
+        }
+        // 若直取失败，再尝试 SPA 兜底
+        const rewritten = new Request(new URL('/index.html', url.origin), request);
+        const fallback = await fetch(rewritten);
+        return withCommonHeaders(fallback, false);
+      }
+
+      // 其它静态资源：优先 ASSETS，其次同域 fetch
       let res;
       if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
         res = await env.ASSETS.fetch(request);
       } else {
-        // 回退：直接用同域请求获取静态资源
         res = await fetch(request);
       }
 
