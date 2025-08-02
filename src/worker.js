@@ -3,6 +3,11 @@
  * - 静态资源：通过 assets = "public" 提供
  * - API 从 ASSETS 读取 public/novels 下的 Markdown（不依赖 import.meta.glob）
  * - SPA 兜底：非 /api/** 的 GET/HEAD 404 时回退到 /index.html
+ *
+ * 注意：URL 编码与文件名匹配
+ * - 书名与 slug 在 URL 中可能被编码（如空格 → %20，中文已编码）
+ * - 资产路径必须使用与 public/novels 下完全一致的文件名
+ * - 这里统一使用 encodeURI 仅对路径安全字符编码，避免 encodeURIComponent 将 "/" 编码破坏子路径
  */
 
 export default {
