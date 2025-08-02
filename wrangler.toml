@@ -1,4 +1,4 @@
-name = "novel-reader"
+name = "tool"
 main = "src/worker.js"
 compatibility_date = "2024-11-12"
 
