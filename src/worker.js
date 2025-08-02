@@ -68,7 +68,18 @@ export default {
       return withCommonHeaders(res, false);
     } catch (err) {
       console.error('Worker error:', err);
-      return withCommonHeaders(json({ error: 'Internal Error', detail: String(err?.stack || err) }, 500), true);
+      // 输出更多上下文，帮助定位 500 根因（如资产路径/编码问题）
+      return withCommonHeaders(
+        json(
+          {
+            error: 'Internal Error',
+            detail: String(err?.stack || err),
+            hint: '检查 public/novels 是否已生成并部署，slug 是否与 index.json 完全一致（空格/中文/标点），以及静态直链能否 200',
+          },
+          500
+        ),
+        true
+      );
     }
   },
 };
@@ -127,7 +138,14 @@ async function fetchAsset(env, baseUrl, assetPath) {
   // assetPath 必须以 / 开头，且相对 public 根
   const url = new URL(assetPath, baseUrl);
   const req = new Request(url.toString(), { method: 'GET' });
-  return env.ASSETS.fetch(req);
+
+  // 兼容两种运行环境：
+  // 1) 本地/某些打包场景：env.ASSETS 可能不可用，直接回退 global fetch 读取同域静态路径
+  // 2) 生产 Workers：优先通过 env.ASSETS.fetch 提供的静态资产
+  if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+    return env.ASSETS.fetch(req);
+  }
+  return fetch(req);
 }
 
 async function fetchAssetJson(env, baseUrl, assetPath) {
