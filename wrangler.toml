@@ -1,7 +1,11 @@
 name = "novel-reader"
+main = "src/worker.js"
 compatibility_date = "2024-11-12"
 
-# 启用 Node.js 兼容（用于本地 dev 使用 node:fs）
+# Workers 模式：通过 assets 提供 public 静态资源
+assets = { directory = "public" }
+
+# 可保留 nodejs 兼容（若无需要可移除）
 compatibility_flags = ["nodejs_compat"]
 
 [observability]
