@@ -116,37 +116,6 @@ body {
 
 .header p { color: #6e6e73; font-size: 13px; }
 
-.account-bar {
-    margin-top: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    background: #f2f2f7;
-    border-radius: 14px;
-    padding: 10px 14px;
-    border: 1px solid rgba(60,60,67,0.12);
-    gap: 12px;
-}
-
-.account-bar.authenticated {
-    background: rgba(52,199,89,0.12);
-    border-color: rgba(52,199,89,0.28);
-}
-
-.account-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: #1d1d1f;
-    font-weight: 600;
-}
-
-.account-btn {
-    min-width: 96px;
-}
-
 .toolbar {
     position: sticky;
     top: 0;

@@ -7,10 +7,6 @@ const modeIndicator = document.getElementById('modeIndicator');
 const quickInsert = document.getElementById('quickInsert');
 const themeSelect = document.getElementById('themeSelect');
 const formatBtn = document.getElementById('formatBtn');
-const accountStatusText = document.getElementById('accountStatusText');
-const accountActionBtn = document.getElementById('accountAction');
-const accountBadge = document.getElementById('accountBadge');
-const accountBar = document.getElementById('accountBar');
 
 let isPreviewMode = false;
 let currentTheme = 'default';
@@ -27,6 +23,8 @@ const THEME_ACCENTS = {
 
 const defaultSuccessMessage = successMessage ? successMessage.textContent : '';
 let currentSession = { authenticated: false, user: null };
+let sessionResolved = false;
+const DRAFT_STORAGE_KEY = 'wechat_editor_draft';
 
 // 历史与光标位置
 let history = [];
@@ -133,54 +131,45 @@ async function loadSessionStatus() {
     currentSession = { authenticated: false, user: null };
     console.error('加载登录状态失败', error);
   }
-  updateAccountUI();
-}
-
-function updateAccountUI() {
-  const authed = !!currentSession?.authenticated;
-  if (accountBar) {
-    accountBar.classList.toggle('authenticated', authed);
-  }
-  if (accountBadge) {
-    accountBadge.textContent = authed ? '🟢' : '🔒';
-  }
-  if (accountStatusText) {
-    accountStatusText.textContent = authed
-      ? `已登录：${currentSession.user?.email || ''}`
-      : '未登录，部分功能不可用';
-  }
-  if (accountActionBtn) {
-    accountActionBtn.textContent = authed ? '退出登录' : '去登录';
-    accountActionBtn.classList.toggle('btn-warning', authed);
-    accountActionBtn.classList.toggle('btn-secondary', !authed);
-    accountActionBtn.onclick = authed ? handleLogout : redirectToLogin;
-  }
+  sessionResolved = true;
   if (formatBtn) {
-    formatBtn.disabled = !authed;
-    formatBtn.title = authed ? '调用智能排版优化当前内容' : '登录后可使用一键排版';
+    formatBtn.disabled = false;
+    formatBtn.title = currentSession?.authenticated
+      ? '调用智能排版优化当前内容'
+      : '登录后将自动提示前往登录页';
   }
+  return currentSession;
 }
 
-async function handleLogout() {
-  const ok = confirm('确认退出登录吗？');
-  if (!ok) return;
+function restoreDraftIfNeeded() {
   try {
-    await fetch('/cloud/logout', {
-      method: 'POST',
-      credentials: 'include'
-    });
+    const draft = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (draft && typeof draft === 'string') {
+      editor.value = draft;
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      if (isPreviewMode && typeof marked !== 'undefined') {
+        renderPreview();
+      }
+      showSuccessMessage('✅ 已恢复上次编辑内容');
+    }
   } catch (error) {
-    console.error('退出登录失败', error);
+    console.error('恢复草稿失败', error);
   }
-  currentSession = { authenticated: false, user: null };
-  updateAccountUI();
 }
 
 function redirectToLogin() {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, editor.value || '');
+  } catch (error) {
+    console.error('保存草稿失败', error);
+  }
   window.location.href = 'auth.html';
 }
 
 async function performOneClickFormat() {
+  if (!currentSession?.authenticated && !sessionResolved) {
+    await loadSessionStatus();
+  }
   if (!currentSession?.authenticated) {
     const goLogin = confirm('登录后才能使用一键排版，是否前往登录页？');
     if (goLogin) redirectToLogin();
@@ -238,7 +227,7 @@ async function performOneClickFormat() {
     if (formatBtn) {
       formatBtn.classList.remove('busy');
       formatBtn.textContent = formatBtn.dataset.originalText || '✨ 一键排版';
-      formatBtn.disabled = !currentSession?.authenticated;
+      formatBtn.disabled = false;
     }
   }
 }
@@ -411,6 +400,7 @@ editor.addEventListener('keydown', (e) => {
 });
 
 // 初始化渲染与历史首帧
+restoreDraftIfNeeded();
 if (typeof marked !== 'undefined') renderPreview();
 setTimeout(() => {
   saveHistory();
@@ -420,7 +410,6 @@ setTimeout(() => {
 if (formatBtn) {
   formatBtn.addEventListener('click', performOneClickFormat);
 }
-updateAccountUI();
 loadSessionStatus();
 
 // 回到顶部
