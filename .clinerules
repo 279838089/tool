@@ -1,0 +1,42 @@
+# Cline Rules Configuration
+
+## File and Directory Filtering Rules
+
+### Exclude Patterns
+- wenfeng/**/*
+- wenfeng/
+- wenfeng/*
+
+### Search Exclusions
+When performing file searches, automatically exclude:
+- All files within wenfeng directory
+- All subdirectories within wenfeng
+- Any file paths containing "wenfeng"
+
+### File Listing Rules
+- Hide wenfeng directory from file listings
+- Do not include wenfeng files in directory summaries
+- Exclude wenfeng from recursive file listings
+
+### Git Operations
+- Skip wenfeng directory in git operations
+- Do not include wenfeng files in diff summaries
+- Exclude wenfeng from commit scope suggestions
+
+### Context Window Management
+- wenfeng files should not be loaded into context
+- Exclude wenfeng content from code analysis
+- Skip wenfeng when calculating token usage
+
+## Pattern Matching
+These rules apply to:
+- Full file paths: d:/code/lionli/wenfeng/
+- Relative paths: wenfeng/
+- Wildcard patterns: wenfeng/**/*
+- Any case variations: WenFeng/, WENFENG/, etc.
+
+## Override Instructions
+To temporarily include wenfeng files:
+1. Use explicit file paths when needed
+2. Temporarily rename .clinerules file
+3. Use --include-wenfeng flag if supported

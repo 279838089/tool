@@ -1,1 +1,131 @@
-hello word
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微信公众号 Markdown 编辑器</title>
+  <link rel="stylesheet" type="text/css" href="styles.css"/>
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no,email=no,address=no">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><span class="grad">📱 微信公众号编辑器</span> <span class="badge">Pro</span></h1>
+      <div class="hero-accent" aria-hidden="true"></div>
+      <p>移动端优化 · 多样式主题 · 公众号兼容</p>
+    </div>
+
+    <div class="style-selector">
+      <label for="themeSelect">🎨 选择样式主题</label>
+      <select id="themeSelect" class="style-select" onchange="changeTheme(this.value)">
+        <option value="default">📘 经典默认</option>
+        <option value="tech">🧪 科技蓝调</option>
+        <option value="elegant">✨ 优雅简约</option>
+        <option value="fresh">🌿 清新自然</option>
+        <option value="warm">🔶 温暖橙调</option>
+        <option value="lemon">🍋 柠檬黄</option>
+        <option value="apple">🍎 苹果风格</option>
+        <option value="minimalist">🧾 极致简约</option>
+      </select>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-secondary" onclick="undoEdit()">↩️ 撤销</button>
+      <button class="btn btn-success" onclick="copyToClipboard()">📋 复制格式</button>
+      <button class="btn btn-info" onclick="toggleMode()" id="toggleBtn">👀 预览效果</button>
+      <button class="btn btn-warning" onclick="clearEditor()">清空</button>
+    </div>
+
+    <div class="content-section">
+      <div class="mode-indicator" id="modeIndicator">预览模式</div>
+
+      <div class="quick-insert" id="quickInsert">
+        <button class="quick-btn" onclick="applyHeading(1)">H1</button>
+        <button class="quick-btn" onclick="applyHeading(2)">H2</button>
+        <button class="quick-btn" onclick="applyHeading(3)">H3</button>
+        <button class="quick-btn" onclick="applyInline('**','**','粗体')">粗体</button>
+        <button class="quick-btn" onclick="prefixSelection('> ')">引用</button>
+        <button class="quick-btn" onclick="prefixSelection('- ')">列表</button>
+        <button class="quick-btn" onclick="prefixSelection('1. ')">数字</button>
+        <button class="quick-btn" onclick="insertText('---')">分割线</button>
+      </div>
+
+      <textarea class="editor" id="editor" placeholder="在这里输入 Markdown 内容...
+
+# 欢迎使用微信编辑器 v1.2.0
+
+这是一个专为 微信公众号 优化的 Markdown 编辑器，支持多种样式主题。
+
+## 🎨 新增特性
+
+### 多样式主题
+- 经典默认：适合正式文档
+- 科技蓝调：现代感强，适合技术文档
+- 优雅简约：文艺气息，适合深度阅读
+- 清新自然：活泼明快，适合生活分享
+- 温暖橙调：温馨亲和，适合情感表达
+- 苹果风格：系统级字体，简洁优雅
+
+### 编辑体验优化
+- 光标位置保持，编辑不跳动
+- 实时预览渲染
+- 快捷键支持
+- 新增 撤销 按钮
+
+## 支持的格式
+
+### 文本样式
+- **粗体文本**
+- *斜体文本*
+- ~~删除线文本~~
+
+### 标题层级
+# 一级标题
+## 二级标题  
+### 三级标题
+
+### 列表格式
+1. 有序列表项目一
+2. 有序列表项目二
+
+- 无序列表项目
+- 另一个项目
+
+### 引用格式
+> 这是一个引用内容
+> 适合突出重要信息
+
+---
+
+选择你喜欢的主题样式，开始创作吧！"></textarea>
+
+      <div class="preview-content theme-default" id="previewContent"></div>
+
+    </div>
+  </div>
+
+  <!-- 隐藏的复制区域 -->
+  <div class="hidden-copy-area">
+    <div id="copyContent"></div>
+  </div>
+
+  <div class="success-message" id="successMessage">✅ 已复制！可直接粘贴到微信编辑器</div>
+
+  <!-- 回到顶部按钮 -->
+  <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+  <script src="themes/theme-default.js"></script>
+  <script src="themes/theme-tech.js"></script>
+  <script src="themes/theme-elegant.js"></script>
+  <script src="themes/theme-fresh.js"></script>
+  <script src="themes/theme-warm.js"></script>
+  <script src="themes/theme-lemon.js"></script>
+  <script src="themes/theme-apple.js"></script>
+  <script src="themes/theme-minimalist.js"></script>
+  <script src="script.js"></script>
+
+</body>
+</html>
