@@ -6,6 +6,11 @@ const toggleBtn = document.getElementById('toggleBtn');
 const modeIndicator = document.getElementById('modeIndicator');
 const quickInsert = document.getElementById('quickInsert');
 const themeSelect = document.getElementById('themeSelect');
+const formatBtn = document.getElementById('formatBtn');
+const accountStatusText = document.getElementById('accountStatusText');
+const accountActionBtn = document.getElementById('accountAction');
+const accountBadge = document.getElementById('accountBadge');
+const accountBar = document.getElementById('accountBar');
 
 let isPreviewMode = false;
 let currentTheme = 'default';
@@ -19,6 +24,9 @@ const THEME_ACCENTS = {
   lemon: '#ca8a04',
   minimalist: '#111111',
 };
+
+const defaultSuccessMessage = successMessage ? successMessage.textContent : '';
+let currentSession = { authenticated: false, user: null };
 
 // 历史与光标位置
 let history = [];
@@ -107,6 +115,132 @@ function changeTheme(theme) {
     document.documentElement.style.setProperty('--accent', color);
   } catch (e) {}
   if (isPreviewMode) renderPreview();
+}
+
+async function loadSessionStatus() {
+  try {
+    const res = await fetch('/cloud/session', {
+      method: 'GET',
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (data?.authenticated) {
+      currentSession = data;
+    } else {
+      currentSession = { authenticated: false, user: null };
+    }
+  } catch (error) {
+    currentSession = { authenticated: false, user: null };
+    console.error('加载登录状态失败', error);
+  }
+  updateAccountUI();
+}
+
+function updateAccountUI() {
+  const authed = !!currentSession?.authenticated;
+  if (accountBar) {
+    accountBar.classList.toggle('authenticated', authed);
+  }
+  if (accountBadge) {
+    accountBadge.textContent = authed ? '🟢' : '🔒';
+  }
+  if (accountStatusText) {
+    accountStatusText.textContent = authed
+      ? `已登录：${currentSession.user?.email || ''}`
+      : '未登录，部分功能不可用';
+  }
+  if (accountActionBtn) {
+    accountActionBtn.textContent = authed ? '退出登录' : '去登录';
+    accountActionBtn.classList.toggle('btn-warning', authed);
+    accountActionBtn.classList.toggle('btn-secondary', !authed);
+    accountActionBtn.onclick = authed ? handleLogout : redirectToLogin;
+  }
+  if (formatBtn) {
+    formatBtn.disabled = !authed;
+    formatBtn.title = authed ? '调用智能排版优化当前内容' : '登录后可使用一键排版';
+  }
+}
+
+async function handleLogout() {
+  const ok = confirm('确认退出登录吗？');
+  if (!ok) return;
+  try {
+    await fetch('/cloud/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (error) {
+    console.error('退出登录失败', error);
+  }
+  currentSession = { authenticated: false, user: null };
+  updateAccountUI();
+}
+
+function redirectToLogin() {
+  window.location.href = 'auth.html';
+}
+
+async function performOneClickFormat() {
+  if (!currentSession?.authenticated) {
+    const goLogin = confirm('登录后才能使用一键排版，是否前往登录页？');
+    if (goLogin) redirectToLogin();
+    return;
+  }
+
+  const markdownText = (editor.value || '').trim();
+  if (!markdownText) {
+    alert('请先输入需要排版的内容');
+    return;
+  }
+
+  const originalText = formatBtn?.textContent;
+  if (formatBtn) {
+    formatBtn.disabled = true;
+    formatBtn.dataset.originalText = formatBtn.dataset.originalText || originalText || '✨ 一键排版';
+    formatBtn.textContent = '排版中...';
+    formatBtn.classList.add('busy');
+  }
+
+  try {
+    const res = await fetch('/cloud/format', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: markdownText })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || '排版失败，请稍后重试');
+    }
+    const formatted = (data.formatted || '').trim();
+    if (!formatted) {
+      throw new Error('排版响应为空，请稍后再试');
+    }
+
+    const wasPreview = isPreviewMode;
+    if (wasPreview) {
+      toggleMode({ suppressFocus: true });
+    }
+    restoring = true;
+    editor.value = formatted;
+    restoring = false;
+    saveHistory();
+    if (wasPreview) {
+      toggleMode({ suppressFocus: true });
+    } else if (isPreviewMode) {
+      renderPreview();
+    }
+    showSuccessMessage('✨ 排版完成，已更新内容');
+  } catch (error) {
+    console.error('格式化失败', error);
+    alert(error.message || '排版服务暂不可用，请稍后再试');
+  } finally {
+    if (formatBtn) {
+      formatBtn.classList.remove('busy');
+      formatBtn.textContent = formatBtn.dataset.originalText || '✨ 一键排版';
+      formatBtn.disabled = !currentSession?.authenticated;
+    }
+  }
 }
 
 // 统一的滚动位置保护
@@ -233,7 +367,9 @@ function copyToClipboard() {
   selection.removeAllRanges();
 }
 
-function showSuccessMessage() {
+function showSuccessMessage(message) {
+  if (!successMessage) return;
+  successMessage.textContent = message || defaultSuccessMessage;
   successMessage.classList.add('show');
   setTimeout(() => successMessage.classList.remove('show'), 2500);
 }
@@ -281,6 +417,11 @@ setTimeout(() => {
   // 初始化强调色
   try { document.documentElement.style.setProperty('--accent', THEME_ACCENTS[currentTheme] || '#0a84ff'); } catch(e) {}
 }, 0);
+if (formatBtn) {
+  formatBtn.addEventListener('click', performOneClickFormat);
+}
+updateAccountUI();
+loadSessionStatus();
 
 // 回到顶部
 const backToTopBtn = document.getElementById('backToTop');

@@ -15,6 +15,13 @@
       <h1><span class="grad">📱 微信公众号编辑器</span> <span class="badge">Pro</span></h1>
       <div class="hero-accent" aria-hidden="true"></div>
       <p>移动端优化 · 多样式主题 · 公众号兼容</p>
+      <div class="account-bar" id="accountBar">
+        <div class="account-info">
+          <span id="accountBadge" aria-hidden="true">🔒</span>
+          <span id="accountStatusText">未登录，部分功能不可用</span>
+        </div>
+        <button class="btn btn-secondary account-btn" id="accountAction" type="button">去登录</button>
+      </div>
     </div>
 
     <div class="style-selector">
@@ -34,6 +41,7 @@
     <div class="toolbar">
       <button class="btn btn-secondary" onclick="undoEdit()">↩️ 撤销</button>
       <button class="btn btn-success" onclick="copyToClipboard()">📋 复制格式</button>
+      <button class="btn btn-primary" id="formatBtn" type="button" disabled>✨ 一键排版</button>
       <button class="btn btn-info" onclick="toggleMode()" id="toggleBtn">👀 预览效果</button>
       <button class="btn btn-warning" onclick="clearEditor()">清空</button>
     </div>
