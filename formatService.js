@@ -19,13 +19,13 @@ export async function formatContent(request, env) {
     return json(request, { error: '服务未配置，请联系管理员' }, 500);
   }
 
-  const systemPrompt = '你是一名专业的微信公众号编辑，擅长对 Markdown 文稿进行精细排版，保持原文核心语义同时提升可读性。输出需为 Markdown 格式，可插入合适的标题、列表、引用、强调等。';
+  const systemPrompt = '你是一名专业的微信公众号编辑，擅长对 Markdown 文稿进行精细排版，保持原文核心语义同时提升可读性。';
   const userPrompt = [
     '请将下面的公众号文章内容进行排版优化：',
     '1. 保持原有重要信息，不随意增删主题内容；',
     '2. 合理分段，必要时添加小标题；',
-    '3. 针对公众号阅读体验优化排版，如引用、强调、编号等；',
-    '4. 直接返回排版后的结果，最终输出使用 Markdown。'
+    '3. 针对公众号阅读体验优化排版，如加粗等；',
+    '4. 直接返回排版后的结果,不要有任何多余的话术，最终输出使用 Markdown。'
   ];
 
   if (tone) {

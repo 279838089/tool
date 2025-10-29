@@ -182,6 +182,11 @@ async function performOneClickFormat() {
     return;
   }
 
+  const confirmed = confirm('确认要执行一键排版吗？当前内容将被优化并覆盖原文本。');
+  if (!confirmed) {
+    return;
+  }
+
   const originalText = formatBtn?.textContent;
   if (formatBtn) {
     formatBtn.disabled = true;
