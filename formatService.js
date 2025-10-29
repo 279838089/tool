@@ -25,7 +25,7 @@ export async function formatContent(request, env) {
     '1. 保持原有重要信息，不随意增删主题内容；',
     '2. 合理分段，必要时添加小标题；',
     '3. 针对公众号阅读体验优化排版，如引用、强调、编号等；',
-    '4. 最终输出使用 Markdown。'
+    '4. 直接返回排版后的结果，最终输出使用 Markdown。'
   ];
 
   if (tone) {
@@ -44,7 +44,7 @@ export async function formatContent(request, env) {
         'X-Title': 'Wechat Formatter'
       },
       body: JSON.stringify({
-        model: 'moonshotai/kimi-k2:free',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt.join('\n') }

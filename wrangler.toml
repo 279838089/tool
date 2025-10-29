@@ -10,3 +10,8 @@ database_id = "5f59d312-e0b0-4f42-b754-43a383276288"
 [vars]
 # OPENROUTER_API_KEY should be stored as a secret:
 # wrangler secret put OPENROUTER_API_KEY
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
